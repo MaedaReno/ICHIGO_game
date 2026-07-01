@@ -35,7 +35,9 @@
     #title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
       justify-content: center; gap: 14px; text-align: center; padding: 20px;
       background: radial-gradient(circle at 50% 30%, #6a3b55, #2a1b26); z-index: 10; }
-    #title h1 { font-size: 2.6rem; margin: 0; }
+    #title h1 { font-size: 2.8rem; margin: 0; letter-spacing: 1px;
+      text-shadow: 0 0 18px #ff5a7a88, 0 2px 0 #00000055; animation: floaty 3s ease-in-out infinite; }
+    @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
     #title .sub { color: #ffc0d4; margin-top: -6px; }
     #title .story { max-width: 520px; line-height: 1.8; color: #f0d8e2; font-size: .95rem;
       background: #0003; border-radius: 12px; padding: 14px 18px; }
@@ -171,6 +173,7 @@
   <script src="js/data.js"></script>
   <script src="js/state.js"></script>
   <script src="js/battle.js"></script>
+  <script src="js/assets.js"></script>
   <script src="js/explore.js"></script>
   <script>
     // ============================================================

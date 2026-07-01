@@ -69,6 +69,14 @@ window.Battle = (function () {
     #battle .banner { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column;
       background:#000000aa; font-size:2rem; font-weight:800; gap:16px; z-index:5; }
     #battle .banner button { font-size:1rem; padding:10px 22px; border:0; border-radius:10px; cursor:pointer; background:#ffd24a; }
+    #battle .unit { position:relative; }                 /* ダメージ数字を上に重ねるための基準 */
+    #battle .portrait { width:3rem; height:3rem; object-fit:contain; }  /* アニメ画像の表示サイズ */
+    #battle .float { position:absolute; left:50%; top:6px; transform:translateX(-50%); font-weight:800; font-size:1.15rem; pointer-events:none; text-shadow:0 1px 3px #000; animation:floatUp .9s ease-out forwards; }
+    #battle .float.dmg { color:#ff6b6b; }                /* ダメージは赤 */
+    #battle .float.heal { color:#7bed9f; }               /* 回復は緑 */
+    @keyframes floatUp { to { transform:translate(-50%,-40px); opacity:0; } } /* 上へ浮かんで消える */
+    #battle.shake { animation:shake .3s; }               /* 被弾時に画面を揺らす */
+    @keyframes shake { 0%,100%{transform:translate(0,0);} 25%{transform:translate(-6px,0);} 75%{transform:translate(6px,0);} }
     `;
     // <style> タグを新しく作り、上で書いた css を中身にして <head> に差し込む。
     const el = document.createElement("style");
@@ -104,11 +112,44 @@ window.Battle = (function () {
   }
 
   // ============================================================
+  //  見た目ヘルパ — キャラ画像(あれば)/ ダメージ数字 / 画面揺れ
+  // ============================================================
+  // artOK … 画像が存在するidを覚えておく箱({penguin:true} など)。
+  const artOK = {};
+  // probeArt … 画像を1回だけ試し読みして「あるか無いか」を記録(戦闘中に404を連発させないため)。
+  function probeArt(ids) {
+    ids.forEach((id) => {
+      if (id in artOK) return;                // 調べ済みならスキップ
+      const im = new Image();
+      im.onload = () => (artOK[id] = true);   // 読めた=画像あり
+      im.onerror = () => (artOK[id] = false); // 読めない=画像なし(絵文字を使う)
+      im.src = "assets/char/" + id + ".png";
+    });
+  }
+  // charHtml … キャラの見た目HTML。画像があれば<img>、無ければ絵文字の<div>を返す。
+  function charHtml(id, emoji) {
+    if (artOK[id]) return `<img class="portrait" src="assets/char/${id}.png" alt="">`;
+    return `<div class="emoji">${emoji}</div>`;
+  }
+  // floatEl … 指定要素の上に「-6」などの数字をふわっと浮かせる小道具。
+  function floatEl(el, txt, cls) {
+    if (!el) return;
+    const f = document.createElement("div");
+    f.className = "float " + cls; f.textContent = txt;
+    el.appendChild(f);
+    setTimeout(() => f.remove(), 900); // 0.9秒後に消す
+  }
+  function floatEnemy(i, txt) { floatEl(ensureRoot().querySelectorAll(".unit.enemy")[i], txt, "dmg"); } // i番目の敵の上に
+  function floatHero(txt, cls) { floatEl(ensureRoot().querySelector(".unit.hero"), txt, cls); }          // 味方の上に
+  function shake() { const r = ensureRoot(); r.classList.add("shake"); setTimeout(() => r.classList.remove("shake"), 300); } // 画面を揺らす
+
+  // ============================================================
   //  戦闘開始 — 外部から呼ばれる入口。状態を初期化して1ターン目を始める
   // ============================================================
   // 引数の { hero, enemies, onEnd } は「分割代入」= 渡されたオブジェクトから必要な値を取り出す書き方。
   function start({ hero, enemies, onEnd }) {
     injectStyle();                 // 見た目のCSSを用意
+    probeArt(["penguin", ...enemies.map((e) => e.id)]); // 出てくるキャラの画像有無を先に確認(...はスプレッド=配列を展開)
     const root = ensureRoot();     // 戦闘画面の箱を用意
     root.classList.add("show");    // "show" クラスを付けて画面を表示状態にする
 
@@ -210,9 +251,16 @@ window.Battle = (function () {
       msg = `${card.name}! シールド +${card.value}`;
     }
 
+    // ダメージ/回復の数字を、描画のあとにキャラの上へ浮かせる関数(render後に呼ぶ必要がある)
+    const doFloat = () => {
+      if (card.type === "attack") floatEnemy(S.enemies.indexOf(target), "-" + (card.value * (card.hits || 1)));
+      else if (card.type === "aoe") S.enemies.forEach((e, i) => floatEnemy(i, "-" + card.value));
+      else if (card.type === "heal") floatHero("+" + card.value, "heal");
+    };
+
     // 敵が全滅したら勝ち。ログを出してから finish("win") で締める。
-    if (aliveEnemies().length === 0) { render(msg); return finish("win"); }
-    render(msg); // まだ敵が残っていれば画面を更新するだけ
+    if (aliveEnemies().length === 0) { render(msg); doFloat(); return finish("win"); }
+    render(msg); doFloat(); // まだ敵が残っていれば画面を更新し、数字を浮かせる
   }
 
   // ============================================================
@@ -242,6 +290,7 @@ window.Battle = (function () {
         S.hero.block -= blocked;
         S.hero.hp = Math.max(0, S.hero.hp - (it.value - blocked)); // 残りぶんHPを削る
         render(`${e.name} の攻撃! ${it.value - blocked} ダメージ`);
+        if (it.value - blocked > 0) { floatHero("-" + (it.value - blocked), "dmg"); shake(); } // ダメージ数字+画面揺れ
       } else if (it.type === "defend") {   // 守りを固める場合
         e.block += it.value;
         render(`${e.name} は身を固めた(シールド +${it.value})`);
@@ -295,7 +344,7 @@ window.Battle = (function () {
       const dead = e.hp <= 0 ? "dead" : ""; // 倒れていれば dead クラス(灰色表示)
       // data-ei に敵の番号 i を仕込んでおく。あとでクリック時にどの敵かを特定するのに使う。
       return `<div class="unit enemy ${targetable} ${dead}" data-ei="${i}">
-        <div class="emoji">${e.emoji}</div>
+        ${charHtml(e.id, e.emoji)}
         <div class="nm">${e.name}</div>
         ${e.hp > 0 ? `<div class="intent">${intentTxt}</div>` : ""}
         <div class="hpbar"><div class="hpfill" style="width:${(e.hp / e.maxHp) * 100}%"></div></div>
@@ -306,7 +355,7 @@ window.Battle = (function () {
     // プレイヤー(hero)の表示を作る。
     const h = S.hero;
     const heroHtml = `<div class="unit hero">
-        <div class="emoji">${h.emoji}</div>
+        ${charHtml("penguin", h.emoji)}
         <div class="nm">${h.name}</div>
         <div class="hpbar"><div class="hpfill" style="width:${(h.hp / h.maxHp) * 100}%"></div></div>
         <div class="hptxt">${h.hp}/${h.maxHp} ${h.block ? `<span class="shield">🛡️${h.block}</span>` : ""}</div>

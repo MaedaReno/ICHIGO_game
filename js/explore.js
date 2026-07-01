@@ -81,6 +81,7 @@ window.Explore = (function () {
   function addPlayer(scene, tx, ty) {
     // マス目座標 → ピクセル座標へ変換(+TILE/2 でマスの中央に置く)
     const x = tx * TILE + TILE / 2, y = ty * TILE + TILE / 2;
+    const shadow = addShadow(scene, x, y); // 足元の影(立体感)
     // 足元の色つきリング(スキンの色。半透明0.55)。setDepth は重なり順(数字が大きいほど手前)。
     const ring = scene.add.circle(x, y, 20, GameState.skinColor(), 0.55).setDepth(2);
     // 絵文字を文字として画面に置く。setOrigin(0.5) で「文字の中心」を座標基準にする。
@@ -89,13 +90,15 @@ window.Explore = (function () {
     // 当たり判定の大きさを 30×30 に整え、絵文字の中央に合わせる
     p.body.setSize(30, 30).setOffset((p.width - 30) / 2, (p.height - 30) / 2);
     p.body.setCollideWorldBounds(true); // マップの外へ出ないようにする
-    p.ring = ring; // リングを後で動かせるよう覚えておく
+    p.ring = ring; p.shadow = shadow; // リングと影を後で動かせるよう覚えておく
+    // assets/char/penguin.png があれば、そのアニメ画像で表示(絵文字は隠す)。無ければ絵文字のまま。
+    if (Assets.has(scene, "penguin")) { p.setText(""); p.sprite = fitSprite(scene.add.image(x, y, "penguin").setDepth(3), 44); }
     return p;
   }
 
   // movePlayer … キー入力を見てプレイヤーを動かす。update() から毎フレーム呼ばれる。
   function movePlayer(scene) {
-    const p = scene.player, speed = 180; // speed=移動速度(1秒あたりのピクセル)
+    const p = scene.player, speed = 180, now = scene.time.now; // speed=移動速度, now=現在時刻(揺れ演出に使う)
     const c = scene.cursors, w = scene.wasd; // c=矢印キー, w=WASDキー
     let vx = 0, vy = 0; // vx=横方向の速度, vy=縦方向の速度(初期は0=止まっている)
     // 左右キーどちらかが押されていれば横方向の速度を設定
@@ -105,6 +108,9 @@ window.Explore = (function () {
     // setVelocity(速度)で動かす。位置を直接変えず「速度」を与えるのが物理エンジン流。
     p.body.setVelocity(vx, vy);
     p.ring.setPosition(p.x, p.y); // 足元リングをプレイヤーに追従させる
+    if (p.shadow) p.shadow.setPosition(p.x, p.y + 14); // 影も追従
+    // アニメ画像を少し上下に揺らして「生きている」感じを出す(sin波でふわふわ)
+    if (p.sprite) p.sprite.setPosition(p.x, p.y + Math.sin(now / 250) * 2);
   }
 
   // makeWalls … 壁をまとめる「静的グループ」を作り、マップとカメラの動ける範囲を決める。
@@ -148,11 +154,33 @@ window.Explore = (function () {
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
   // ============================================================
+  //  見た目の演出ヘルパ — アニメ画像の差し込み・影・キラキラ
+  // ============================================================
+
+  // fitSprite … 画像の「大きい方の辺」が target px になるよう自動で縮小する(アニメ画像のサイズ調整)
+  function fitSprite(img, target) { img.setScale(target / Math.max(img.width, img.height)); return img; }
+
+  // addShadow … キャラの足元に薄い楕円の影を置いて立体感を出す
+  function addShadow(scene, x, y) { return scene.add.ellipse(x, y + 14, 26, 10, 0x000000, 0.22).setDepth(1); }
+
+  // sparkle … ✨を放射状にパッと散らす簡単な演出(収穫・レベルアップで使う)
+  function sparkle(scene, x, y) {
+    for (let i = 0; i < 8; i++) {
+      const a = Math.random() * Math.PI * 2, r = 18 + Math.random() * 12; // ランダムな向き・距離
+      const s = scene.add.text(x, y, "✨", { fontSize: "16px" }).setOrigin(0.5).setDepth(60);
+      // tweens.add … 時間をかけて値をなめらかに変える演出。外側へ飛ばしながら透明に消す。
+      scene.tweens.add({ targets: s, x: x + Math.cos(a) * r, y: y + Math.sin(a) * r, alpha: 0, duration: 600, onComplete: () => s.destroy() });
+    }
+  }
+
+  // ============================================================
   //  VillageScene(村シーン) — 平和なイチゴの村。栽培・スキン屋・フィールドへの門
   // ============================================================
   // class ... extends ... は「継承」。Phaser.Scene の機能を受け継いだ自分専用のシーンを作る。
   class VillageScene extends Phaser.Scene {
     constructor() { super("village"); } // super("village") でこのシーンに "village" という名前を付ける
+    // preload() … create の前に呼ばれ、使う画像を読み込む(あれば)。無い画像は自動で絵文字にフォールバック。
+    preload() { Assets.load(this); }
     // create() … 村に入った最初の1回。地形・建物・畑・プレイヤーなどを配置する。
     create() {
       const scene = this; // this(このシーン自身)を scene という名前で使いやすくしておく
@@ -255,7 +283,7 @@ window.Explore = (function () {
     if (near.type === "plot") {
       const i = near.pl.i, st = GameState.plotState(i);
       if (st === "empty") { GameState.plant(i); toast(scene, "いちごを植えた! 少し待つと育つよ"); }
-      else if (st === "ready") { const y = GameState.harvest(i); toast(scene, `収穫! 🍓ベリー +${y}`); cbs.refreshHud && cbs.refreshHud(); }
+      else if (st === "ready") { const y = GameState.harvest(i); sparkle(scene, near.pl.x, near.pl.y); toast(scene, `収穫! 🍓ベリー +${y}`); cbs.refreshHud && cbs.refreshHud(); }
       else toast(scene, "まだ育っていない…");
       return;
     }
@@ -274,6 +302,8 @@ window.Explore = (function () {
   // ============================================================
   class FieldScene extends Phaser.Scene {
     constructor() { super("field"); } // このシーンの名前は "field"
+    // preload() … create の前に呼ばれ、使う画像を読み込む(あれば)。
+    preload() { Assets.load(this); }
     // create() … フィールドに入った最初の1回。地形・敵・プレイヤーを配置する。
     create() {
       const scene = this;
@@ -341,7 +371,9 @@ window.Explore = (function () {
   // addEnemy … 敵1体を生成する。c,r=マス目位置, def=敵の定義(絵文字・種類・レベル)。
   function addEnemy(scene, c, r, def) {
     const size = def.kind === "boss" ? 40 : 30; // ボスは大きめ
-    const e = scene.add.text(c * TILE + TILE / 2, r * TILE + TILE / 2, def.emoji, { fontSize: size + "px" }).setOrigin(0.5).setDepth(3);
+    const x = c * TILE + TILE / 2, y = r * TILE + TILE / 2;
+    const shadow = addShadow(scene, x, y); // 足元の影
+    const e = scene.add.text(x, y, def.emoji, { fontSize: size + "px" }).setOrigin(0.5).setDepth(3);
     scene.physics.add.existing(e); // 物理ボディを付けて動けるようにする
     e.body.setSize(size * 0.8, size * 0.8).setOffset((e.width - size * 0.8) / 2, (e.height - size * 0.8) / 2);
     e.body.setCollideWorldBounds(true);
@@ -350,6 +382,9 @@ window.Explore = (function () {
     e.tag = scene.add.text(e.x, e.y - 24, "Lv" + def.level, { fontSize: "12px", color: "#fff", backgroundColor: "#0007", padding: { x: 3, y: 1 } })
       .setOrigin(0.5).setDepth(4);
     e.nextWander = 0; // 次にうろつく向きを変える時刻(徘徊AIで使う)
+    e.shadow = shadow;
+    // assets/char/<敵id>.png があればアニメ画像で表示(絵文字は隠す)。無ければ絵文字のまま。
+    if (Assets.has(scene, def.id)) { e.setText(""); e.sprite = fitSprite(scene.add.image(x, y, def.id).setDepth(3), size + 10); }
     scene.enemies.add(e);
     return e;
   }
@@ -377,6 +412,8 @@ window.Explore = (function () {
       e.tag.setColor("#ffffff"); // ラベルを白に
     }
     e.tag.setPosition(e.x, e.y - 24); // ラベルを敵の頭上に追従させる
+    if (e.shadow) e.shadow.setPosition(e.x, e.y + 14); // 影を追従
+    if (e.sprite) e.sprite.setPosition(e.x, e.y + Math.sin(now / 250 + e.x) * 2); // 画像を上下に揺らす(敵ごとに位相をずらす)
   }
   // wander … 一定時間ごとにランダムな方向へ歩き出す「徘徊」の動き。
   function wander(e, now, spd) {
@@ -411,13 +448,20 @@ window.Explore = (function () {
     } else {
       // 勝った場合:経験値・ベリーを獲得。レベルアップしたら最大HPを増やして全回復。
       const r = GameState.grantXp(enemy.kind);
-      if (r.leveled) { hero.maxHp = GameState.maxHp(); hero.hp = hero.maxHp; }
+      if (r.leveled) {
+        hero.maxHp = GameState.maxHp(); hero.hp = hero.maxHp;
+        scene.cameras.main.flash(300, 255, 240, 180); // 画面をパッと光らせるレベルアップ演出
+        sparkle(scene, scene.player.x, scene.player.y); // ✨を散らす
+      }
       toast(scene, `+${r.gained}XP / 🍓+${r.berries}` + (r.leveled ? `  レベルアップ! Lv${GameState.profile.level}` : ""));
       cbs.refreshHud && cbs.refreshHud();
     }
 
-    // 倒した(または復活した)ので、その敵を画面から消して探索を再開する
-    enemy.tag.destroy(); enemy.destroy();
+    // 倒した(または復活した)ので、その敵(画像・影・ラベルも一緒に)を画面から消して探索を再開する
+    enemy.tag.destroy();
+    if (enemy.sprite) enemy.sprite.destroy();
+    if (enemy.shadow) enemy.shadow.destroy();
+    enemy.destroy();
     updateHp(scene);
     scene.inBattle = false;  // 戦闘中フラグを下ろす
     scene.physics.resume();  // 物理を再開して再び動けるようにする
