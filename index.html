@@ -39,6 +39,10 @@
       text-shadow: 0 0 18px #ff5a7a88, 0 2px 0 #00000055; animation: floaty 3s ease-in-out infinite; }
     @keyframes floaty { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
     #title .sub { color: #ffc0d4; margin-top: -6px; }
+    /* 隅に小さく置くデモ用リンク(ゲーム本編とは無関係) */
+    #gachaLink { position: absolute; right: 12px; bottom: 10px; font-size: .72rem;
+      color: #b98ca0; text-decoration: none; opacity: .65; border-bottom: 1px dotted #b98ca0; }
+    #gachaLink:hover { opacity: 1; color: #ffc0d4; }
     #title .story { max-width: 520px; line-height: 1.8; color: #f0d8e2; font-size: .95rem;
       background: #0003; border-radius: 12px; padding: 14px 18px; }
     .panel { background: #0004; border: 1px solid #ffffff22; border-radius: 14px; padding: 16px; min-width: 320px; }
@@ -118,6 +122,9 @@
       </div>
     </div>
     <div class="muted">操作: 矢印キー / WASD で移動</div>
+
+    <!-- ▼ ゲーム本編とは無関係の小リンク。関係者向けに「ICHIGOを消費するページの例」として置いてある。 -->
+    <a id="gachaLink" href="gacha.html">🍓 ICHIGOガチャ(デモ)</a>
   </div>
 
   <!-- ▼ ゲーム描画領域(Phaser マウント先)
