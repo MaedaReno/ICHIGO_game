@@ -1,18 +1,37 @@
+<!-- ============================================================
+     ICHIGO QUEST — トップページ(ゲームの入口)
+     ------------------------------------------------------------
+     このファイルは、ブラウザで動くゲーム「ICHIGO QUEST」の
+     メインページ(最初に開かれる画面)です。
+     大きく分けると、次のことをしています。
+       1. 外部ライブラリを読み込む
+          ・ethers.js … ブロックチェーン(Optimism)と通信するための道具
+          ・Phaser   … 2D ゲームを動かすためのゲームエンジン
+       2. 自作の js/*.js ファイルを読み込む(課金・データ・セーブ・戦闘・マップ)
+       3. まずタイトル画面を表示する
+       4. 「冒険に出る」を押すと Phaser のゲーム世界が起動する
+     ※ プレイ自体は無料。ウォレット接続は「任意」で、
+       主にやられた時の復活や有料スキンに使います。
+     ============================================================ -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>🐧 ICHIGO QUEST</title>
-  <!-- 依存ライブラリ(CDN・ビルド不要) -->
+
+  <!-- 依存ライブラリ(CDN から読み込むのでビルド作業は不要)
+       ・ethers.js = ブロックチェーン通信(ウォレット接続・送金・残高取得)
+       ・Phaser    = ゲームエンジン(画面描画・当たり判定・入力など) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
   <style>
+    /* 全体の基本設定(ページ全体の余白・背景色・文字色など) */
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; }
     body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #2a1b26; color: #fff; }
 
-    /* タイトル画面 */
+    /* タイトル画面(最初に出る、あらすじ・開始ボタン・ウォレット接続の画面) */
     #title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
       justify-content: center; gap: 14px; text-align: center; padding: 20px;
       background: radial-gradient(circle at 50% 30%, #6a3b55, #2a1b26); z-index: 10; }
@@ -34,11 +53,11 @@
     .mono { font-family: monospace; font-size: .75rem; color: #b98ca0; word-break: break-all; }
     .warn { color: #ff9d9d; }
 
-    /* ゲーム画面 */
+    /* ゲーム画面(Phaser がゲーム世界を描く場所。show クラスが付くと表示) */
     #game-container { position: fixed; inset: 0; display: none; background: #000; }
     #game-container.show { display: block; }
 
-    /* リザルト */
+    /* リザルト・敗北画面(ゲームの上に重ねて出すオーバーレイ) */
     #result { position: fixed; inset: 0; z-index: 1100; display: none; flex-direction: column;
       align-items: center; justify-content: center; gap: 18px; background: #000000cc; text-align: center; }
     #result.show { display: flex; }
@@ -47,13 +66,13 @@
       align-items: center; justify-content: center; gap: 16px; background: #000000d8; text-align: center; padding: 20px; }
     #defeat.show { display: flex; }
     #defeat h2 { font-size: 2rem; margin: 0; }
-    /* ゲーム中 HUD */
+    /* ゲーム中 HUD(画面上部に常に出る情報バー。レベル・ベリー・衣装) */
     #hud { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 900;
       display: none; gap: 14px; align-items: center; background: #000000aa; border-radius: 12px;
       padding: 6px 14px; font-size: .95rem; }
     #hud.show { display: flex; }
     #hud b { color: #ffd24a; }
-    /* スキン屋 */
+    /* スキン屋(ペンギンの見た目を買ったり着替えたりするお店ウィンドウ) */
     #shop { position: fixed; inset: 0; z-index: 1300; display: none; align-items: center; justify-content: center; background: #000000cc; }
     #shop.show { display: flex; }
     #shop .shopbox { background: #3a2233; border: 1px solid #ff5a7a55; border-radius: 16px; padding: 20px; width: min(440px, 92vw); max-height: 86vh; overflow: auto; text-align: center; }
@@ -66,7 +85,9 @@
   </style>
 </head>
 <body>
-  <!-- タイトル -->
+  <!-- ▼ タイトル画面
+       ページを開いて最初に見える画面。ゲームのタイトル・あらすじ、
+       「冒険に出る」ボタン、そして任意のウォレット接続パネルが並ぶ。 -->
   <div id="title">
     <h1>🐧 ICHIGO QUEST</h1>
     <div class="sub">ペンギン、いちご畑を守る</div>
@@ -97,10 +118,14 @@
     <div class="muted">操作: 矢印キー / WASD で移動</div>
   </div>
 
-  <!-- Phaser マウント先 -->
+  <!-- ▼ ゲーム描画領域(Phaser マウント先)
+       冒険が始まると、この空っぽの箱の中に Phaser が
+       マップやキャラクターを描いてくれる。 -->
   <div id="game-container"></div>
 
-  <!-- ゲーム中 HUD -->
+  <!-- ▼ HUD(ゲーム中に常に見える情報バー)
+       今のレベル・持っている🍓ベリー・着ている衣装を表示。
+       右の「タイトル」ボタンでいつでもタイトルへ戻れる。 -->
   <div id="hud">
     <span>Lv <b id="hudLv">1</b></span>
     <span>🍓 <b id="hudBerry">0</b></span>
@@ -108,7 +133,9 @@
     <button id="hudQuit" class="ghost" style="padding:4px 10px; font-size:.8rem;">タイトル</button>
   </div>
 
-  <!-- スキン屋 -->
+  <!-- ▼ スキン屋(見た目を変えるお店)
+       村でお店に話しかけると開くウィンドウ。中身(スキン一覧)は
+       JavaScript の renderShop() が動的に作って挿入する。 -->
   <div id="shop">
     <div class="shopbox">
       <h2>🎨 スキン屋</h2>
@@ -119,7 +146,10 @@
     </div>
   </div>
 
-  <!-- 敗北(任意で ICHIGO 復活) -->
+  <!-- ▼ 敗北画面
+       ペンギンがやられると重ねて表示される。ウォレットを接続していて
+       ICHIGO が足りていれば「復活」ボタンが出る(任意)。
+       復活しない場合は「あきらめる」でタイトルへ戻る。 -->
   <div id="defeat">
     <h2>💀 やられてしまった…</h2>
     <div id="defeatMsg" class="muted" style="max-width:420px;"></div>
@@ -130,23 +160,65 @@
     <div id="defeatStatus" class="muted"></div>
   </div>
 
-  <!-- ゲームスクリプト -->
+  <!-- ゲーム本体のスクリプト(自作の js/ ファイル)
+       読み込み順が大事。下のファイルほど「上のファイルの機能」を使う。
+       ・ichigo-pay.js = 課金 … ウォレット接続・ICHIGO の支払い(IchigoPay)
+       ・data.js       = データ … 敵やスキンなどの固定データ(GameData)
+       ・state.js      = セーブ … レベルやベリー等の進行状況の保存(GameState)
+       ・battle.js     = 戦闘 … 敵とのバトル処理
+       ・explore.js    = マップ … フィールド探索と全体の進行(Explore) -->
   <script src="js/ichigo-pay.js"></script>
   <script src="js/data.js"></script>
   <script src="js/state.js"></script>
   <script src="js/battle.js"></script>
   <script src="js/explore.js"></script>
   <script>
+    // ============================================================
+    //  このスクリプトの役割 — ページ全体の「司令塔(オーケストレーション)」
+    // ------------------------------------------------------------
+    //  ボタンが押されたら何をするか、画面をどう切り替えるかをまとめる。
+    //  全体の流れ:
+    //    接続(任意) → 冒険開始 → HUD更新 → スキン屋 → 敗北時の任意復活
+    //
+    //  最初に出てくる用語のミニ解説(ここで一度だけ):
+    //   ・document.getElementById("id")
+    //       HTML の中から id が一致する要素を1つ探して取ってくる命令。
+    //       ここでは短く $ という名前で使えるようにしている。
+    //   ・アロー関数  (引数) => { 処理 }
+    //       「関数」を短く書く書き方。名前を付けずにその場で作れる。
+    //   ・addEventListener("click", 関数)
+    //       「クリックされたらこの関数を実行して」とボタン等にお願いする命令。
+    //   ・async / await
+    //       時間のかかる処理(通信など)を「待ってから次へ」進める書き方。
+    //       async を付けた関数の中で await を使うと、結果が返るまで一時停止する。
+    //   ・Promise
+    //       「あとで結果が返ってくる約束」を表す入れもの。await はこれを待つ。
+    //   ・テンプレートリテラル  `文字 ${変数} 文字`
+    //       バッククォートで囲むと、文の中に ${ } で変数を埋め込める。
+    // ============================================================
+
+    // $ … document.getElementById の短縮版。$("id") で要素を取り出せる。
     const $ = (id) => document.getElementById(id);
     const REVIVE_COST = 30; // 任意:敗北時の復活にかかる ICHIGO
+    // 敗北画面のボタンに表示する復活コスト(数字)を最初に入れておく
     $("reviveCost").textContent = REVIVE_COST;
+
+    // ============================================================
+    //  setStatus — タイトル画面の一行メッセージを書き換える
+    //  (isErr が true なら赤色の警告表示にする)
+    // ============================================================
 
     function setStatus(msg, isErr) {
       $("status").textContent = msg || "";
       $("status").className = isErr ? "warn" : "muted";
     }
 
-    // ウォレットは任意。接続時のみ残高/ネットワークを更新する。
+    // ============================================================
+    //  refreshWallet — ウォレットの残高やネットワーク表示を最新にする
+    // ------------------------------------------------------------
+    //  ウォレットは任意なので、接続していないときは何もしない。
+    //  接続中なら Optimism 上にいるか確認し、いれば ICHIGO 残高を表示。
+    // ============================================================
     async function refreshWallet() {
       if (!IchigoPay.connected) return;
       try {
@@ -160,7 +232,13 @@
       } catch (e) { setStatus(e.message, true); }
     }
 
-    // 復活が実際に使えるか(接続済み & Optimism & 残高十分)
+    // ============================================================
+    //  canRevive — いま「復活」が使える状態かどうかを判定する
+    // ------------------------------------------------------------
+    //  次の3つが全部そろって初めて true(復活可能):
+    //   ウォレット接続済み / Optimism 上にいる / ICHIGO 残高が足りている。
+    //  結果は true か false を返す(await で受け取って使う)。
+    // ============================================================
     async function canRevive() {
       if (!IchigoPay.connected) return false;
       try {
@@ -171,6 +249,12 @@
       } catch { return false; }
     }
 
+    // ============================================================
+    //  「ウォレットを接続」ボタン — 押されたときの処理
+    // ------------------------------------------------------------
+    //  IchigoPay.connect() で接続を試み、成功したらアドレスや残高を表示。
+    //  接続には少し時間がかかるので async/await で待っている。
+    // ============================================================
     $("connectBtn").addEventListener("click", async () => {
       setStatus("接続中…");
       try {
@@ -184,13 +268,27 @@
       } catch (e) { setStatus(e.message, true); }
     });
 
+    // ============================================================
+    //  「Optimism に切替」ボタン — ネットワークを Optimism に変更する
+    // ============================================================
     $("switchBtn").addEventListener("click", async () => {
       try { await IchigoPay.switchToOptimism(); } catch (e) { setStatus(e.message, true); }
     });
 
-    // --- プレイは無料。すぐ開始 ---
+    // ============================================================
+    //  「冒険に出る」ボタン — 押したらすぐ startRun() でゲーム開始
+    //  (プレイは無料なので、ウォレット接続を待たずに始められる)
+    // ============================================================
     $("startBtn").addEventListener("click", () => startRun());
 
+    // ============================================================
+    //  startRun — 冒険を始める(タイトル→ゲーム画面へ切り替え)
+    // ------------------------------------------------------------
+    //  セーブを読み込み、タイトルを隠してゲーム画面と HUD を表示し、
+    //  最後に Explore.launch() で Phaser のゲーム世界を起動する。
+    //  launch には「敗北時・スキン屋・HUD更新」の処理を渡し、
+    //  ゲーム側から必要なタイミングで呼び出してもらう。
+    // ============================================================
     function startRun() {
       GameState.load();
       $("title").style.display = "none";
@@ -206,7 +304,11 @@
       });
     }
 
-    // ゲーム中 HUD(レベル/ベリー/衣装)
+    // ============================================================
+    //  refreshHud — 画面上部の HUD(レベル/ベリー/衣装)を最新にする
+    // ------------------------------------------------------------
+    //  GameState.profile(今の進行状況)を読んで表示を書き換える。
+    // ============================================================
     function refreshHud() {
       const p = GameState.profile;
       if (!p) return;
@@ -215,6 +317,11 @@
       $("hudSkin").textContent = GameState.skinName();
     }
 
+    // ============================================================
+    //  quitToTitle — ゲームを終了してタイトル画面へ戻る
+    // ------------------------------------------------------------
+    //  Phaser を片付け、ゲーム画面と HUD を隠してタイトルを再表示する。
+    // ============================================================
     function quitToTitle() {
       Explore.destroy();
       $("game-container").classList.remove("show");
@@ -222,9 +329,17 @@
       $("title").style.display = "flex";
       refreshWallet();
     }
+    // HUD の「タイトル」ボタンが押されたら quitToTitle を実行
     $("hudQuit").addEventListener("click", quitToTitle);
 
-    // 敗北画面。ICHIGO を払えば復活(任意)、払わなければタイトルへ。
+    // ============================================================
+    //  showDefeat — 敗北画面を出して、プレイヤーの選択を待つ
+    // ------------------------------------------------------------
+    //  ICHIGO を払えば復活(任意)、払わなければタイトルへ。
+    //  Promise を返しているのがポイント。呼び出したゲーム側は
+    //  await showDefeat() で「プレイヤーが選ぶまで」待てる。
+    //  選び終わったら resolve("revive") か resolve("quit") で結果を返す。
+    // ============================================================
     function showDefeat() {
       return new Promise(async (resolve) => {
         const overlay = $("defeat");
@@ -241,12 +356,15 @@
         }
         overlay.classList.add("show");
 
+        // cleanup … 敗北画面を閉じ、ボタンの処理を外して後片付けする
         const cleanup = () => {
           overlay.classList.remove("show");
           $("reviveBtn").onclick = null;
           $("quitBtn").onclick = null;
         };
+        // 「あきらめる」→ 片付けて "quit" を返す(タイトルへ戻る)
         $("quitBtn").onclick = () => { cleanup(); resolve("quit"); };
+        // 「復活」→ ICHIGO を支払い、成功したら "revive" を返す
         $("reviveBtn").onclick = async () => {
           $("reviveBtn").disabled = true;
           try {
@@ -264,7 +382,12 @@
       });
     }
 
-    // ===== スキン屋(村のインタラクトから呼ばれる。閉じたら resolve) =====
+    // ============================================================
+    //  openSkinShop — スキン屋を開く(村でお店に話しかけると呼ばれる)
+    // ------------------------------------------------------------
+    //  一覧を作って表示し、「とじる」が押されるまで Promise で待つ。
+    //  閉じたら resolve() で「お店を閉じたよ」とゲーム側に知らせる。
+    // ============================================================
     function openSkinShop() {
       return new Promise((resolve) => {
         renderShop();
@@ -278,8 +401,18 @@
       });
     }
 
+    // ============================================================
+    //  renderShop — スキン一覧の中身を作って画面に表示する
+    // ------------------------------------------------------------
+    //  GameData.SKINS の全スキンを順番に見て、1行ずつHTMLを組み立てる。
+    //   ・使用中  → 「使用中」ボタン(押せない)
+    //   ・所持済み → 「えらぶ」ボタン(装備を切り替える)
+    //   ・未所持  → 「○○で入手」ボタン(購入する)
+    //  最後に各ボタンへクリック処理(えらぶ/買う)を取り付ける。
+    // ============================================================
     function renderShop() {
       const p = GameState.profile;
+      // `${p.berries}` の部分に今のベリー数が埋め込まれる(テンプレートリテラル)
       $("shopBerry").textContent = `所持 🍓ベリー: ${p.berries}`;
       $("shopStatus").textContent = "";
       $("shopStatus").className = "";
@@ -305,6 +438,13 @@
         b.addEventListener("click", () => buySkin(b.dataset.buy)));
     }
 
+    // ============================================================
+    //  buySkin — スキンを購入する(支払い方法で分岐)
+    // ------------------------------------------------------------
+    //   ・berry(ゲーム内ベリー) → ベリーを消費。足りなければ中止。
+    //   ・ichigo(ブロックチェーンの ICHIGO) → 接続が必要。支払いを待つ。
+    //  支払いが済んだらスキンを手持ちに追加し、そのまま装備する。
+    // ============================================================
     async function buySkin(id) {
       const s = GameData.SKINS[id];
       $("shopStatus").className = "";
