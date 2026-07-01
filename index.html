@@ -3,252 +3,322 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>🍓 イチゴガチャ</title>
+  <title>🐧 ICHIGO QUEST</title>
+  <!-- 依存ライブラリ(CDN・ビルド不要) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
   <style>
-    :root { --pink: #e8537a; --pink-d: #c93e63; }
     * { box-sizing: border-box; }
-    body {
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      max-width: 640px; margin: 32px auto; padding: 0 20px;
-      background: #fff7f9; color: #2a2a2a; line-height: 1.7;
-    }
-    h1 { font-size: 1.6rem; margin-bottom: 4px; }
-    .card {
-      background: #fff; border: 1px solid #f2c6d3; border-radius: 14px;
-      padding: 18px 20px; margin: 14px 0; box-shadow: 0 2px 10px rgba(232,83,122,.08);
-    }
-    button {
-      background: var(--pink); color: #fff; border: 0; border-radius: 10px;
-      padding: 12px 18px; font-size: 1rem; cursor: pointer;
-    }
-    button:hover:not(:disabled) { background: var(--pink-d); }
+    html, body { margin: 0; height: 100%; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #2a1b26; color: #fff; }
+
+    /* タイトル画面 */
+    #title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 14px; text-align: center; padding: 20px;
+      background: radial-gradient(circle at 50% 30%, #6a3b55, #2a1b26); z-index: 10; }
+    #title h1 { font-size: 2.6rem; margin: 0; }
+    #title .sub { color: #ffc0d4; margin-top: -6px; }
+    #title .story { max-width: 520px; line-height: 1.8; color: #f0d8e2; font-size: .95rem;
+      background: #0003; border-radius: 12px; padding: 14px 18px; }
+    .panel { background: #0004; border: 1px solid #ffffff22; border-radius: 14px; padding: 16px; min-width: 320px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+    button { background: #ff5a7a; color: #fff; border: 0; border-radius: 10px; padding: 12px 20px;
+      font-size: 1rem; font-weight: 700; cursor: pointer; }
+    button:hover:not(:disabled) { background: #e84368; }
     button:disabled { opacity: .5; cursor: not-allowed; }
-    button.secondary { background: #fff; color: var(--pink); border: 1px solid var(--pink); }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .mono { font-family: monospace; word-break: break-all; font-size: .8rem; color: #777; }
-    .balance { font-size: 1.8rem; font-weight: 700; color: var(--pink); }
-    .muted { color: #999; font-size: .85rem; }
-    .err { color: #c0392b; white-space: pre-wrap; }
-    .ok { color: #1e8449; }
-    .gacha-result {
-      text-align: center; padding: 28px; border-radius: 14px; margin-top: 8px;
-      font-size: 1.4rem; font-weight: 700; animation: pop .4s ease;
-    }
-    @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-    .rarity-N   { background: #eef1f5; color: #5b6b7c; }
-    .rarity-R   { background: #e3f0ff; color: #2563eb; }
-    .rarity-SR  { background: #f3e8ff; color: #9333ea; }
-    .rarity-SSR { background: linear-gradient(135deg,#ffe29a,#ff8c42); color: #7a3e00; box-shadow: 0 0 20px #ffc04a; }
-    .inv-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-    .inv-item { padding: 6px 10px; border-radius: 8px; font-size: .85rem; }
-    .hidden { display: none; }
-    .pill { font-size: .75rem; padding: 2px 8px; border-radius: 99px; background:#fde7ee; color: var(--pink-d); margin-left: 6px;}
+    button.ghost { background: transparent; border: 1px solid #ff5a7a; color: #ff9db2; }
+    .bal { font-size: 1.1rem; }
+    .bal b { color: #ffd24a; }
+    .muted { color: #c9a9b8; font-size: .85rem; }
+    #status { min-height: 1.4em; color: #ffd24a; font-size: .9rem; }
+    .mono { font-family: monospace; font-size: .75rem; color: #b98ca0; word-break: break-all; }
+    .warn { color: #ff9d9d; }
+
+    /* ゲーム画面 */
+    #game-container { position: fixed; inset: 0; display: none; background: #000; }
+    #game-container.show { display: block; }
+
+    /* リザルト */
+    #result { position: fixed; inset: 0; z-index: 1100; display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px; background: #000000cc; text-align: center; }
+    #result.show { display: flex; }
+    #result h2 { font-size: 2.2rem; margin: 0; }
+    #defeat { position: fixed; inset: 0; z-index: 1200; display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px; background: #000000d8; text-align: center; padding: 20px; }
+    #defeat.show { display: flex; }
+    #defeat h2 { font-size: 2rem; margin: 0; }
+    /* ゲーム中 HUD */
+    #hud { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 900;
+      display: none; gap: 14px; align-items: center; background: #000000aa; border-radius: 12px;
+      padding: 6px 14px; font-size: .95rem; }
+    #hud.show { display: flex; }
+    #hud b { color: #ffd24a; }
+    /* スキン屋 */
+    #shop { position: fixed; inset: 0; z-index: 1300; display: none; align-items: center; justify-content: center; background: #000000cc; }
+    #shop.show { display: flex; }
+    #shop .shopbox { background: #3a2233; border: 1px solid #ff5a7a55; border-radius: 16px; padding: 20px; width: min(440px, 92vw); max-height: 86vh; overflow: auto; text-align: center; }
+    #shop h2 { margin: 0 0 8px; }
+    .skinrow { display: flex; align-items: center; gap: 10px; background: #0003; border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+    .skinrow .sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; flex: 0 0 auto; }
+    .skinrow .nm { flex: 1; text-align: left; }
+    .skinrow button { padding: 8px 12px; font-size: .85rem; }
+    #shopStatus { min-height: 1.3em; font-size: .85rem; color: #ffd24a; }
   </style>
 </head>
 <body>
-  <h1>🍓 イチゴガチャ</h1>
-  <p class="muted">イチゴ(ICHIGO)を払ってガチャを回そう! <span class="pill">Optimism</span></p>
-
-  <!-- 接続前 -->
-  <div class="card" id="connectCard">
-    <div class="row">
-      <button id="connectBtn">MetaMask をつなぐ</button>
+  <!-- タイトル -->
+  <div id="title">
+    <h1>🐧 ICHIGO QUEST</h1>
+    <div class="sub">ペンギン、いちご畑を守る</div>
+    <div class="story">
+      雪国から流れ着いたペンギンは、あまくて赤い「いちご畑」に出会った。<br>
+      だが畑は カビ・ナメクジ・いちご泥棒カラス に狙われている…!<br>
+      お菓子の力を借りて、畑の奥に潜む <b>カビゴーレム王</b> を倒し、畑を取り戻そう。
     </div>
-    <p class="muted" id="connectHint">※ ボタンを押すと MetaMask が開きます。</p>
-  </div>
 
-  <!-- 接続後 -->
-  <div class="card hidden" id="walletCard">
-    <div class="row" style="justify-content: space-between;">
-      <div>
-        <div class="muted">あなたの ICHIGO 残高</div>
-        <div class="balance"><span id="balance">-</span> 🍓</div>
+    <div class="panel">
+      <div class="row"><button id="startBtn">冒険に出る 🐧</button></div>
+      <div class="muted" style="margin-top:8px;">プレイは<b>無料</b>。ウォレット接続は不要です。</div>
+      <div id="status"></div>
+    </div>
+
+    <div class="panel">
+      <div class="muted">🍓 <b>ICHIGO(任意)</b> — やられた時の<b>復活</b>などに使えます</div>
+      <div class="row" style="margin-top:10px;">
+        <button id="connectBtn" class="ghost">ウォレットを接続</button>
+        <button id="switchBtn" class="ghost" style="display:none">Optimism に切替</button>
       </div>
-      <button class="secondary" id="refreshBtn">残高を更新</button>
+      <div id="walletInfo" style="display:none; margin-top:10px;">
+        <div class="bal">所持 <b id="balance">-</b> 🍓 ICHIGO</div>
+        <div class="mono" id="account"></div>
+        <div id="netWarn" class="warn" style="display:none">⚠️ ネットワークが Optimism ではありません</div>
+      </div>
     </div>
-    <div class="mono" id="account"></div>
-    <div class="muted" id="network"></div>
-    <div id="netWarn" class="hidden">
-      <p class="err">⚠️ ネットワークが Optimism ではありません。</p>
-      <button id="switchBtn" class="secondary">Optimism に切り替える</button>
+    <div class="muted">操作: 矢印キー / WASD で移動</div>
+  </div>
+
+  <!-- Phaser マウント先 -->
+  <div id="game-container"></div>
+
+  <!-- ゲーム中 HUD -->
+  <div id="hud">
+    <span>Lv <b id="hudLv">1</b></span>
+    <span>🍓 <b id="hudBerry">0</b></span>
+    <span>衣装 <b id="hudSkin">ノーマル</b></span>
+    <button id="hudQuit" class="ghost" style="padding:4px 10px; font-size:.8rem;">タイトル</button>
+  </div>
+
+  <!-- スキン屋 -->
+  <div id="shop">
+    <div class="shopbox">
+      <h2>🎨 スキン屋</h2>
+      <div class="muted" id="shopBerry"></div>
+      <div id="shopList"></div>
+      <div id="shopStatus"></div>
+      <button id="shopClose">とじる</button>
     </div>
   </div>
 
-  <!-- ガチャ -->
-  <div class="card hidden" id="gachaCard">
-    <div class="row" style="justify-content: space-between;">
-      <div><b>1回</b> = <b id="costLabel">100</b> ICHIGO</div>
-      <button id="pullBtn">ガチャを回す 🎰</button>
+  <!-- 敗北(任意で ICHIGO 復活) -->
+  <div id="defeat">
+    <h2>💀 やられてしまった…</h2>
+    <div id="defeatMsg" class="muted" style="max-width:420px;"></div>
+    <div class="row">
+      <button id="reviveBtn" style="display:none">🍓 ICHIGOで復活 (<span id="reviveCost">30</span>)</button>
+      <button id="quitBtn" class="ghost">あきらめる(タイトルへ)</button>
     </div>
-    <p class="muted" id="gachaStatus"></p>
-    <div id="gachaResult"></div>
+    <div id="defeatStatus" class="muted"></div>
   </div>
 
-  <!-- 所持アイテム -->
-  <div class="card hidden" id="invCard">
-    <div class="muted">手に入れたアイテム</div>
-    <div class="inv-grid" id="invGrid"></div>
-  </div>
-
-  <p id="error" class="err"></p>
-
+  <!-- ゲームスクリプト -->
+  <script src="js/ichigo-pay.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/battle.js"></script>
+  <script src="js/explore.js"></script>
   <script>
-    // ===== 設定 =====
-    const TOKEN_ADDR  = "0x836700463Dce76D9Cc3CDf6F6EDF946312c01869"; // ICHIGO
-    // 方法C: ガチャ代はこの「集約用ウォレット(運営代表)」に1回の送金で集める。
-    // 運営2人の 5:5 精算は、後でまとめて手動送金する(オンチェーンで自動分配はしない=ガス節約)。
-    const GAME_WALLET = "0x0d9Ff88703b8bcB42ca7e526246C2dcf9A4aEdb9"; // ← 集約先。運営代表のアドレスに変更可
-    const COST        = 100;        // 1回のイチゴ消費量
-    const OP_CHAIN_ID = 10n;
-    const OPTIMISM = {
-      chainId: "0xa", chainName: "OP Mainnet",
-      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-      rpcUrls: ["https://mainnet.optimism.io"],
-      blockExplorerUrls: ["https://optimistic.etherscan.io"],
-    };
-    // ガチャの中身(確率は weight の比率)
-    const GACHA = [
-      { rarity: "SSR", weight: 1,  items: ["✨ 黄金のイチゴ", "👑 イチゴの王冠"] },
-      { rarity: "SR",  weight: 9,  items: ["🍰 イチゴショート", "🍓 大粒イチゴ"] },
-      { rarity: "R",   weight: 30, items: ["🥛 イチゴミルク", "🍬 イチゴキャンディ"] },
-      { rarity: "N",   weight: 60, items: ["🌱 イチゴの種", "🍃 イチゴの葉"] },
-    ];
-
-    const ERC20_ABI = [
-      "function balanceOf(address) view returns (uint256)",
-      "function decimals() view returns (uint8)",
-      "function transfer(address to, uint256 amount) returns (bool)"
-    ];
-
     const $ = (id) => document.getElementById(id);
-    let provider, signer, account, token, decimals = 18n;
+    const REVIVE_COST = 30; // 任意:敗北時の復活にかかる ICHIGO
+    $("reviveCost").textContent = REVIVE_COST;
 
-    function showError(e) {
-      console.error(e);
-      $("error").textContent = e ? ("エラー: " + (e.shortMessage || e.message || e)) : "";
-    }
-    function invKey() { return "ichigo_inv_" + account.toLowerCase(); }
-    function loadInv() { try { return JSON.parse(localStorage.getItem(invKey())) || []; } catch { return []; } }
-    function saveInv(list) { localStorage.setItem(invKey(), JSON.stringify(list)); }
-
-    function renderInv() {
-      const list = loadInv();
-      $("invCard").classList.toggle("hidden", list.length === 0);
-      $("invGrid").innerHTML = list.map(it =>
-        `<span class="inv-item rarity-${it.rarity}">${it.name} <b>${it.rarity}</b></span>`
-      ).join("");
+    function setStatus(msg, isErr) {
+      $("status").textContent = msg || "";
+      $("status").className = isErr ? "warn" : "muted";
     }
 
-    async function refreshBalance() {
-      const raw = await token.balanceOf(account);
-      $("balance").textContent = Number(ethers.formatUnits(raw, decimals)).toLocaleString();
-      return raw;
+    // ウォレットは任意。接続時のみ残高/ネットワークを更新する。
+    async function refreshWallet() {
+      if (!IchigoPay.connected) return;
+      try {
+        const net = await IchigoPay.checkNetwork();
+        $("netWarn").style.display = net.onOptimism ? "none" : "block";
+        $("switchBtn").style.display = net.onOptimism ? "none" : "inline-block";
+        if (net.onOptimism) {
+          const { formatted } = await IchigoPay.getBalance();
+          $("balance").textContent = formatted.toLocaleString();
+        }
+      } catch (e) { setStatus(e.message, true); }
     }
 
-    async function checkNetwork() {
-      const net = await provider.getNetwork();
-      $("network").textContent = `ネットワーク: ${net.name}（chainId: ${net.chainId}）`;
-      const onOP = net.chainId === OP_CHAIN_ID;
-      $("netWarn").classList.toggle("hidden", onOP);
-      $("pullBtn").disabled = !onOP;
-      return onOP;
+    // 復活が実際に使えるか(接続済み & Optimism & 残高十分)
+    async function canRevive() {
+      if (!IchigoPay.connected) return false;
+      try {
+        const net = await IchigoPay.checkNetwork();
+        if (!net.onOptimism) return false;
+        const { formatted } = await IchigoPay.getBalance();
+        return formatted >= REVIVE_COST;
+      } catch { return false; }
     }
 
     $("connectBtn").addEventListener("click", async () => {
-      showError(null);
+      setStatus("接続中…");
       try {
-        if (!window.ethereum) throw new Error("MetaMask が見つかりません。http://localhost で開いているか確認してください。");
-        provider = new ethers.BrowserProvider(window.ethereum);
-        await provider.send("eth_requestAccounts", []);
-        signer = await provider.getSigner();
-        account = await signer.getAddress();
-        token = new ethers.Contract(TOKEN_ADDR, ERC20_ABI, signer);
-        decimals = await token.decimals().catch(() => 18n);
-
-        $("account").textContent = account;
-        $("connectCard").classList.add("hidden");
-        $("walletCard").classList.remove("hidden");
-        $("gachaCard").classList.remove("hidden");
-        $("costLabel").textContent = COST;
-
-        // ネットワーク変更を検知して自動更新
-        window.ethereum.on?.("chainChanged", () => location.reload());
-        window.ethereum.on?.("accountsChanged", () => location.reload());
-
-        if (await checkNetwork()) await refreshBalance();
-        renderInv();
-      } catch (e) { showError(e); }
+        const acct = await IchigoPay.connect();
+        IchigoPay.onChange(); // 変更時はリロード
+        $("connectBtn").style.display = "none";
+        $("walletInfo").style.display = "block";
+        $("account").textContent = acct;
+        setStatus("");
+        await refreshWallet();
+      } catch (e) { setStatus(e.message, true); }
     });
 
     $("switchBtn").addEventListener("click", async () => {
-      showError(null);
-      try {
-        try {
-          await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: OPTIMISM.chainId }] });
-        } catch (e) {
-          if (e.code === 4902) await window.ethereum.request({ method: "wallet_addEthereumChain", params: [OPTIMISM] });
-          else throw e;
-        }
-      } catch (e) { showError(e); }
+      try { await IchigoPay.switchToOptimism(); } catch (e) { setStatus(e.message, true); }
     });
 
-    $("refreshBtn").addEventListener("click", async () => {
-      showError(null);
-      try { if (await checkNetwork()) await refreshBalance(); } catch (e) { showError(e); }
-    });
+    // --- プレイは無料。すぐ開始 ---
+    $("startBtn").addEventListener("click", () => startRun());
 
-    function rollGacha() {
-      const total = GACHA.reduce((s, g) => s + g.weight, 0);
-      let r = Math.random() * total;
-      for (const g of GACHA) {
-        if (r < g.weight) {
-          const name = g.items[Math.floor(Math.random() * g.items.length)];
-          return { rarity: g.rarity, name };
-        }
-        r -= g.weight;
-      }
-      return { rarity: "N", name: GACHA[GACHA.length - 1].items[0] };
+    function startRun() {
+      GameState.load();
+      $("title").style.display = "none";
+      $("game-container").classList.add("show");
+      $("hud").classList.add("show");
+      refreshHud();
+
+      Explore.launch({
+        parent: "game-container",
+        onDefeat: showDefeat,        // 敗北時:任意で ICHIGO 復活
+        openSkinShop: openSkinShop,  // 村のスキン屋
+        refreshHud: refreshHud,      // HUD 更新
+      });
     }
 
-    $("pullBtn").addEventListener("click", async () => {
-      showError(null);
-      $("gachaResult").innerHTML = "";
-      const btn = $("pullBtn");
+    // ゲーム中 HUD(レベル/ベリー/衣装)
+    function refreshHud() {
+      const p = GameState.profile;
+      if (!p) return;
+      $("hudLv").textContent = p.level;
+      $("hudBerry").textContent = p.berries;
+      $("hudSkin").textContent = GameState.skinName();
+    }
+
+    function quitToTitle() {
+      Explore.destroy();
+      $("game-container").classList.remove("show");
+      $("hud").classList.remove("show");
+      $("title").style.display = "flex";
+      refreshWallet();
+    }
+    $("hudQuit").addEventListener("click", quitToTitle);
+
+    // 敗北画面。ICHIGO を払えば復活(任意)、払わなければタイトルへ。
+    function showDefeat() {
+      return new Promise(async (resolve) => {
+        const overlay = $("defeat");
+        $("defeatStatus").textContent = "";
+        const revivable = await canRevive();
+        if (revivable) {
+          $("reviveBtn").style.display = "inline-block";
+          $("defeatMsg").textContent = `ICHIGO ${REVIVE_COST} を払うと、HP全回復＆この敵を退けて続行できます(任意)。`;
+        } else {
+          $("reviveBtn").style.display = "none";
+          $("defeatMsg").textContent = IchigoPay.connected
+            ? "復活には Optimism 上の ICHIGO が必要です。無料でやり直すこともできます。"
+            : "復活したい場合はタイトルでウォレットを接続してください。もちろん無料でやり直せます。";
+        }
+        overlay.classList.add("show");
+
+        const cleanup = () => {
+          overlay.classList.remove("show");
+          $("reviveBtn").onclick = null;
+          $("quitBtn").onclick = null;
+        };
+        $("quitBtn").onclick = () => { cleanup(); resolve("quit"); };
+        $("reviveBtn").onclick = async () => {
+          $("reviveBtn").disabled = true;
+          try {
+            await IchigoPay.pay(REVIVE_COST, (m) => { $("defeatStatus").textContent = m; });
+            await refreshWallet();      // 全回復は explore 側で実施
+            $("reviveBtn").disabled = false;
+            cleanup();
+            resolve("revive");
+          } catch (e) {
+            $("defeatStatus").textContent = e.message;
+            $("defeatStatus").className = "warn";
+            $("reviveBtn").disabled = false;
+          }
+        };
+      });
+    }
+
+    // ===== スキン屋(村のインタラクトから呼ばれる。閉じたら resolve) =====
+    function openSkinShop() {
+      return new Promise((resolve) => {
+        renderShop();
+        $("shop").classList.add("show");
+        $("shopClose").onclick = () => {
+          $("shop").classList.remove("show");
+          $("shopClose").onclick = null;
+          refreshHud();
+          resolve();
+        };
+      });
+    }
+
+    function renderShop() {
+      const p = GameState.profile;
+      $("shopBerry").textContent = `所持 🍓ベリー: ${p.berries}`;
+      $("shopStatus").textContent = "";
+      $("shopStatus").className = "";
+      const list = $("shopList");
+      list.innerHTML = "";
+      Object.values(GameData.SKINS).forEach((s) => {
+        const color = "#" + s.color.toString(16).padStart(6, "0");
+        const owned = GameState.ownSkin(s.id);
+        const equipped = p.skin === s.id;
+        const priceTxt = s.currency === "berry" ? `🍓${s.price}` : s.currency === "ichigo" ? `ICHIGO ${s.price}(任意)` : "無料";
+        let btn;
+        if (equipped) btn = `<button disabled>使用中</button>`;
+        else if (owned) btn = `<button data-equip="${s.id}">えらぶ</button>`;
+        else btn = `<button data-buy="${s.id}">${priceTxt} で入手</button>`;
+        const row = document.createElement("div");
+        row.className = "skinrow";
+        row.innerHTML = `<span class="sw" style="background:${color}"></span><span class="nm">${s.name}</span>${btn}`;
+        list.appendChild(row);
+      });
+      list.querySelectorAll("[data-equip]").forEach((b) =>
+        b.addEventListener("click", () => { GameState.setSkin(b.dataset.equip); renderShop(); refreshHud(); }));
+      list.querySelectorAll("[data-buy]").forEach((b) =>
+        b.addEventListener("click", () => buySkin(b.dataset.buy)));
+    }
+
+    async function buySkin(id) {
+      const s = GameData.SKINS[id];
+      $("shopStatus").className = "";
       try {
-        if (!(await checkNetwork())) return;
-        const amount = ethers.parseUnits(String(COST), decimals);
-        const bal = await token.balanceOf(account);
-        if (bal < amount) throw new Error(`イチゴが足りません(必要: ${COST}）。`);
-
-        // ① 課金(送金)トランザクションを送る
-        btn.disabled = true;
-        $("gachaStatus").textContent = "MetaMask で送金を承認してください…";
-        const tx = await token.transfer(GAME_WALLET, amount);
-
-        $("gachaStatus").textContent = "送金を確認中…（数秒）";
-        await tx.wait(); // ② 確定を待つ
-
-        // ③ 確定したのでガチャを回す
-        const prize = rollGacha();
-        const inv = loadInv();
-        inv.push(prize);
-        saveInv(inv);
-
-        $("gachaResult").innerHTML =
-          `<div class="gacha-result rarity-${prize.rarity}">${prize.rarity}！<br>${prize.name}</div>`;
-        $("gachaStatus").innerHTML =
-          `<span class="ok">課金成功!</span> ` +
-          `<a href="https://optimistic.etherscan.io/tx/${tx.hash}" target="_blank">取引を確認</a>`;
-        await refreshBalance();
-        renderInv();
-      } catch (e) {
-        $("gachaStatus").textContent = "";
-        showError(e);
-      } finally {
-        btn.disabled = false;
-      }
-    });
+        if (s.currency === "berry") {
+          if (!GameState.spendBerries(s.price)) { $("shopStatus").textContent = "🍓ベリーが足りません"; $("shopStatus").className = "warn"; return; }
+        } else if (s.currency === "ichigo") {
+          if (!IchigoPay.connected) { $("shopStatus").textContent = "ICHIGOスキンはタイトルでウォレット接続が必要です(任意)"; $("shopStatus").className = "warn"; return; }
+          await IchigoPay.pay(s.price, (m) => { $("shopStatus").textContent = m; });
+        }
+        GameState.addSkin(id); GameState.setSkin(id);
+        renderShop(); refreshHud();
+      } catch (e) { $("shopStatus").textContent = e.message; $("shopStatus").className = "warn"; }
+    }
   </script>
 </body>
 </html>
