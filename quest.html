@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🐧 ICHIGO QUEST</title>
+  <!-- 依存ライブラリ(CDN・ビルド不要) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #2a1b26; color: #fff; }
+
+    /* タイトル画面 */
+    #title { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 14px; text-align: center; padding: 20px;
+      background: radial-gradient(circle at 50% 30%, #6a3b55, #2a1b26); z-index: 10; }
+    #title h1 { font-size: 2.6rem; margin: 0; }
+    #title .sub { color: #ffc0d4; margin-top: -6px; }
+    #title .story { max-width: 520px; line-height: 1.8; color: #f0d8e2; font-size: .95rem;
+      background: #0003; border-radius: 12px; padding: 14px 18px; }
+    .panel { background: #0004; border: 1px solid #ffffff22; border-radius: 14px; padding: 16px; min-width: 320px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+    button { background: #ff5a7a; color: #fff; border: 0; border-radius: 10px; padding: 12px 20px;
+      font-size: 1rem; font-weight: 700; cursor: pointer; }
+    button:hover:not(:disabled) { background: #e84368; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button.ghost { background: transparent; border: 1px solid #ff5a7a; color: #ff9db2; }
+    .bal { font-size: 1.1rem; }
+    .bal b { color: #ffd24a; }
+    .muted { color: #c9a9b8; font-size: .85rem; }
+    #status { min-height: 1.4em; color: #ffd24a; font-size: .9rem; }
+    .mono { font-family: monospace; font-size: .75rem; color: #b98ca0; word-break: break-all; }
+    .warn { color: #ff9d9d; }
+
+    /* ゲーム画面 */
+    #game-container { position: fixed; inset: 0; display: none; background: #000; }
+    #game-container.show { display: block; }
+
+    /* リザルト */
+    #result { position: fixed; inset: 0; z-index: 1100; display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px; background: #000000cc; text-align: center; }
+    #result.show { display: flex; }
+    #result h2 { font-size: 2.2rem; margin: 0; }
+    #defeat { position: fixed; inset: 0; z-index: 1200; display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px; background: #000000d8; text-align: center; padding: 20px; }
+    #defeat.show { display: flex; }
+    #defeat h2 { font-size: 2rem; margin: 0; }
+  </style>
+</head>
+<body>
+  <!-- タイトル -->
+  <div id="title">
+    <h1>🐧 ICHIGO QUEST</h1>
+    <div class="sub">ペンギン、いちご畑を守る</div>
+    <div class="story">
+      雪国から流れ着いたペンギンは、あまくて赤い「いちご畑」に出会った。<br>
+      だが畑は カビ・ナメクジ・いちご泥棒カラス に狙われている…!<br>
+      お菓子の力を借りて、畑の奥に潜む <b>カビゴーレム王</b> を倒し、畑を取り戻そう。
+    </div>
+
+    <div class="panel">
+      <div class="row"><button id="startBtn">冒険に出る 🐧</button></div>
+      <div class="muted" style="margin-top:8px;">プレイは<b>無料</b>。ウォレット接続は不要です。</div>
+      <div id="status"></div>
+    </div>
+
+    <div class="panel">
+      <div class="muted">🍓 <b>ICHIGO(任意)</b> — やられた時の<b>復活</b>などに使えます</div>
+      <div class="row" style="margin-top:10px;">
+        <button id="connectBtn" class="ghost">ウォレットを接続</button>
+        <button id="switchBtn" class="ghost" style="display:none">Optimism に切替</button>
+      </div>
+      <div id="walletInfo" style="display:none; margin-top:10px;">
+        <div class="bal">所持 <b id="balance">-</b> 🍓 ICHIGO</div>
+        <div class="mono" id="account"></div>
+        <div id="netWarn" class="warn" style="display:none">⚠️ ネットワークが Optimism ではありません</div>
+      </div>
+    </div>
+    <div class="muted">操作: 矢印キー / WASD で移動</div>
+  </div>
+
+  <!-- Phaser マウント先 -->
+  <div id="game-container"></div>
+
+  <!-- リザルト(勝利) -->
+  <div id="result">
+    <h2 id="resultMsg"></h2>
+    <button id="backBtn">タイトルへ</button>
+  </div>
+
+  <!-- 敗北(任意で ICHIGO 復活) -->
+  <div id="defeat">
+    <h2>💀 やられてしまった…</h2>
+    <div id="defeatMsg" class="muted" style="max-width:420px;"></div>
+    <div class="row">
+      <button id="reviveBtn" style="display:none">🍓 ICHIGOで復活 (<span id="reviveCost">30</span>)</button>
+      <button id="quitBtn" class="ghost">あきらめる(タイトルへ)</button>
+    </div>
+    <div id="defeatStatus" class="muted"></div>
+  </div>
+
+  <!-- ゲームスクリプト -->
+  <script src="js/ichigo-pay.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/battle.js"></script>
+  <script src="js/explore.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const REVIVE_COST = 30; // 任意:敗北時の復活にかかる ICHIGO
+    $("reviveCost").textContent = REVIVE_COST;
+
+    let hero = null;
+
+    function setStatus(msg, isErr) {
+      $("status").textContent = msg || "";
+      $("status").className = isErr ? "warn" : "muted";
+    }
+
+    // ウォレットは任意。接続時のみ残高/ネットワークを更新する。
+    async function refreshWallet() {
+      if (!IchigoPay.connected) return;
+      try {
+        const net = await IchigoPay.checkNetwork();
+        $("netWarn").style.display = net.onOptimism ? "none" : "block";
+        $("switchBtn").style.display = net.onOptimism ? "none" : "inline-block";
+        if (net.onOptimism) {
+          const { formatted } = await IchigoPay.getBalance();
+          $("balance").textContent = formatted.toLocaleString();
+        }
+      } catch (e) { setStatus(e.message, true); }
+    }
+
+    // 復活が実際に使えるか(接続済み & Optimism & 残高十分)
+    async function canRevive() {
+      if (!IchigoPay.connected) return false;
+      try {
+        const net = await IchigoPay.checkNetwork();
+        if (!net.onOptimism) return false;
+        const { formatted } = await IchigoPay.getBalance();
+        return formatted >= REVIVE_COST;
+      } catch { return false; }
+    }
+
+    $("connectBtn").addEventListener("click", async () => {
+      setStatus("接続中…");
+      try {
+        const acct = await IchigoPay.connect();
+        IchigoPay.onChange(); // 変更時はリロード
+        $("connectBtn").style.display = "none";
+        $("walletInfo").style.display = "block";
+        const clears = IchigoPay.load("quest_clears", 0) || 0;
+        $("account").textContent = clears > 0 ? `${acct}｜クリア ${clears} 回` : acct;
+        setStatus("");
+        await refreshWallet();
+      } catch (e) { setStatus(e.message, true); }
+    });
+
+    $("switchBtn").addEventListener("click", async () => {
+      try { await IchigoPay.switchToOptimism(); } catch (e) { setStatus(e.message, true); }
+    });
+
+    // --- プレイは無料。すぐ開始 ---
+    $("startBtn").addEventListener("click", () => startRun());
+
+    function startRun() {
+      hero = GameData.clone(GameData.HERO);
+      hero.hp = hero.maxHp;
+
+      $("title").style.display = "none";
+      $("game-container").classList.add("show");
+
+      Explore.launch({
+        parent: "game-container",
+        hero,
+        onEncounter: (kind) => new Promise((resolve) => {
+          Battle.start({ hero, enemies: GameData.encounter(kind), onEnd: resolve });
+        }),
+        onDefeat: showDefeat,          // 任意で ICHIGO 復活
+        onClear: () => endRun(true),
+        onGameOver: backToTitle,       // あきらめた場合
+      });
+    }
+
+    // 敗北画面。ICHIGO を払えば復活(任意)、払わなければタイトルへ。
+    function showDefeat() {
+      return new Promise(async (resolve) => {
+        const overlay = $("defeat");
+        $("defeatStatus").textContent = "";
+        const revivable = await canRevive();
+        if (revivable) {
+          $("reviveBtn").style.display = "inline-block";
+          $("defeatMsg").textContent = `ICHIGO ${REVIVE_COST} を払うと、HP全回復＆この敵を退けて続行できます(任意)。`;
+        } else {
+          $("reviveBtn").style.display = "none";
+          $("defeatMsg").textContent = IchigoPay.connected
+            ? "復活には Optimism 上の ICHIGO が必要です。無料でやり直すこともできます。"
+            : "復活したい場合はタイトルでウォレットを接続してください。もちろん無料でやり直せます。";
+        }
+        overlay.classList.add("show");
+
+        const cleanup = () => {
+          overlay.classList.remove("show");
+          $("reviveBtn").onclick = null;
+          $("quitBtn").onclick = null;
+        };
+        $("quitBtn").onclick = () => { cleanup(); resolve("quit"); };
+        $("reviveBtn").onclick = async () => {
+          $("reviveBtn").disabled = true;
+          try {
+            await IchigoPay.pay(REVIVE_COST, (m) => { $("defeatStatus").textContent = m; });
+            hero.hp = hero.maxHp;       // 全回復して続行
+            await refreshWallet();
+            $("reviveBtn").disabled = false;
+            cleanup();
+            resolve("revive");
+          } catch (e) {
+            $("defeatStatus").textContent = e.message;
+            $("defeatStatus").className = "warn";
+            $("reviveBtn").disabled = false;
+          }
+        };
+      });
+    }
+
+    function endRun(win) {
+      Explore.destroy();
+      $("game-container").classList.remove("show");
+      if (win) {
+        const clears = (IchigoPay.load("quest_clears", 0) || 0) + 1;
+        IchigoPay.save("quest_clears", clears);
+      }
+      $("resultMsg").textContent = "🎉 いちご畑を守った!";
+      $("result").classList.add("show");
+    }
+
+    function backToTitle() {
+      Explore.destroy();
+      $("game-container").classList.remove("show");
+      $("title").style.display = "flex";
+      refreshWallet();
+    }
+
+    $("backBtn").addEventListener("click", () => {
+      $("result").classList.remove("show");
+      $("title").style.display = "flex";
+      refreshWallet();
+    });
+  </script>
+</body>
+</html>

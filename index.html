@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🍓 イチゴガチャ</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+  <style>
+    :root { --pink: #e8537a; --pink-d: #c93e63; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      max-width: 640px; margin: 32px auto; padding: 0 20px;
+      background: #fff7f9; color: #2a2a2a; line-height: 1.7;
+    }
+    h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    .card {
+      background: #fff; border: 1px solid #f2c6d3; border-radius: 14px;
+      padding: 18px 20px; margin: 14px 0; box-shadow: 0 2px 10px rgba(232,83,122,.08);
+    }
+    button {
+      background: var(--pink); color: #fff; border: 0; border-radius: 10px;
+      padding: 12px 18px; font-size: 1rem; cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: var(--pink-d); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button.secondary { background: #fff; color: var(--pink); border: 1px solid var(--pink); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .mono { font-family: monospace; word-break: break-all; font-size: .8rem; color: #777; }
+    .balance { font-size: 1.8rem; font-weight: 700; color: var(--pink); }
+    .muted { color: #999; font-size: .85rem; }
+    .err { color: #c0392b; white-space: pre-wrap; }
+    .ok { color: #1e8449; }
+    .gacha-result {
+      text-align: center; padding: 28px; border-radius: 14px; margin-top: 8px;
+      font-size: 1.4rem; font-weight: 700; animation: pop .4s ease;
+    }
+    @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .rarity-N   { background: #eef1f5; color: #5b6b7c; }
+    .rarity-R   { background: #e3f0ff; color: #2563eb; }
+    .rarity-SR  { background: #f3e8ff; color: #9333ea; }
+    .rarity-SSR { background: linear-gradient(135deg,#ffe29a,#ff8c42); color: #7a3e00; box-shadow: 0 0 20px #ffc04a; }
+    .inv-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .inv-item { padding: 6px 10px; border-radius: 8px; font-size: .85rem; }
+    .hidden { display: none; }
+    .pill { font-size: .75rem; padding: 2px 8px; border-radius: 99px; background:#fde7ee; color: var(--pink-d); margin-left: 6px;}
+  </style>
+</head>
+<body>
+  <h1>🍓 イチゴガチャ</h1>
+  <p class="muted">イチゴ(ICHIGO)を払ってガチャを回そう! <span class="pill">Optimism</span></p>
+
+  <!-- 接続前 -->
+  <div class="card" id="connectCard">
+    <div class="row">
+      <button id="connectBtn">MetaMask をつなぐ</button>
+    </div>
+    <p class="muted" id="connectHint">※ ボタンを押すと MetaMask が開きます。</p>
+  </div>
+
+  <!-- 接続後 -->
+  <div class="card hidden" id="walletCard">
+    <div class="row" style="justify-content: space-between;">
+      <div>
+        <div class="muted">あなたの ICHIGO 残高</div>
+        <div class="balance"><span id="balance">-</span> 🍓</div>
+      </div>
+      <button class="secondary" id="refreshBtn">残高を更新</button>
+    </div>
+    <div class="mono" id="account"></div>
+    <div class="muted" id="network"></div>
+    <div id="netWarn" class="hidden">
+      <p class="err">⚠️ ネットワークが Optimism ではありません。</p>
+      <button id="switchBtn" class="secondary">Optimism に切り替える</button>
+    </div>
+  </div>
+
+  <!-- ガチャ -->
+  <div class="card hidden" id="gachaCard">
+    <div class="row" style="justify-content: space-between;">
+      <div><b>1回</b> = <b id="costLabel">100</b> ICHIGO</div>
+      <button id="pullBtn">ガチャを回す 🎰</button>
+    </div>
+    <p class="muted" id="gachaStatus"></p>
+    <div id="gachaResult"></div>
+  </div>
+
+  <!-- 所持アイテム -->
+  <div class="card hidden" id="invCard">
+    <div class="muted">手に入れたアイテム</div>
+    <div class="inv-grid" id="invGrid"></div>
+  </div>
+
+  <p id="error" class="err"></p>
+
+  <script>
+    // ===== 設定 =====
+    const TOKEN_ADDR  = "0x836700463Dce76D9Cc3CDf6F6EDF946312c01869"; // ICHIGO
+    // 方法C: ガチャ代はこの「集約用ウォレット(運営代表)」に1回の送金で集める。
+    // 運営2人の 5:5 精算は、後でまとめて手動送金する(オンチェーンで自動分配はしない=ガス節約)。
+    const GAME_WALLET = "0x0d9Ff88703b8bcB42ca7e526246C2dcf9A4aEdb9"; // ← 集約先。運営代表のアドレスに変更可
+    const COST        = 100;        // 1回のイチゴ消費量
+    const OP_CHAIN_ID = 10n;
+    const OPTIMISM = {
+      chainId: "0xa", chainName: "OP Mainnet",
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      rpcUrls: ["https://mainnet.optimism.io"],
+      blockExplorerUrls: ["https://optimistic.etherscan.io"],
+    };
+    // ガチャの中身(確率は weight の比率)
+    const GACHA = [
+      { rarity: "SSR", weight: 1,  items: ["✨ 黄金のイチゴ", "👑 イチゴの王冠"] },
+      { rarity: "SR",  weight: 9,  items: ["🍰 イチゴショート", "🍓 大粒イチゴ"] },
+      { rarity: "R",   weight: 30, items: ["🥛 イチゴミルク", "🍬 イチゴキャンディ"] },
+      { rarity: "N",   weight: 60, items: ["🌱 イチゴの種", "🍃 イチゴの葉"] },
+    ];
+
+    const ERC20_ABI = [
+      "function balanceOf(address) view returns (uint256)",
+      "function decimals() view returns (uint8)",
+      "function transfer(address to, uint256 amount) returns (bool)"
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    let provider, signer, account, token, decimals = 18n;
+
+    function showError(e) {
+      console.error(e);
+      $("error").textContent = e ? ("エラー: " + (e.shortMessage || e.message || e)) : "";
+    }
+    function invKey() { return "ichigo_inv_" + account.toLowerCase(); }
+    function loadInv() { try { return JSON.parse(localStorage.getItem(invKey())) || []; } catch { return []; } }
+    function saveInv(list) { localStorage.setItem(invKey(), JSON.stringify(list)); }
+
+    function renderInv() {
+      const list = loadInv();
+      $("invCard").classList.toggle("hidden", list.length === 0);
+      $("invGrid").innerHTML = list.map(it =>
+        `<span class="inv-item rarity-${it.rarity}">${it.name} <b>${it.rarity}</b></span>`
+      ).join("");
+    }
+
+    async function refreshBalance() {
+      const raw = await token.balanceOf(account);
+      $("balance").textContent = Number(ethers.formatUnits(raw, decimals)).toLocaleString();
+      return raw;
+    }
+
+    async function checkNetwork() {
+      const net = await provider.getNetwork();
+      $("network").textContent = `ネットワーク: ${net.name}（chainId: ${net.chainId}）`;
+      const onOP = net.chainId === OP_CHAIN_ID;
+      $("netWarn").classList.toggle("hidden", onOP);
+      $("pullBtn").disabled = !onOP;
+      return onOP;
+    }
+
+    $("connectBtn").addEventListener("click", async () => {
+      showError(null);
+      try {
+        if (!window.ethereum) throw new Error("MetaMask が見つかりません。http://localhost で開いているか確認してください。");
+        provider = new ethers.BrowserProvider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = await provider.getSigner();
+        account = await signer.getAddress();
+        token = new ethers.Contract(TOKEN_ADDR, ERC20_ABI, signer);
+        decimals = await token.decimals().catch(() => 18n);
+
+        $("account").textContent = account;
+        $("connectCard").classList.add("hidden");
+        $("walletCard").classList.remove("hidden");
+        $("gachaCard").classList.remove("hidden");
+        $("costLabel").textContent = COST;
+
+        // ネットワーク変更を検知して自動更新
+        window.ethereum.on?.("chainChanged", () => location.reload());
+        window.ethereum.on?.("accountsChanged", () => location.reload());
+
+        if (await checkNetwork()) await refreshBalance();
+        renderInv();
+      } catch (e) { showError(e); }
+    });
+
+    $("switchBtn").addEventListener("click", async () => {
+      showError(null);
+      try {
+        try {
+          await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: OPTIMISM.chainId }] });
+        } catch (e) {
+          if (e.code === 4902) await window.ethereum.request({ method: "wallet_addEthereumChain", params: [OPTIMISM] });
+          else throw e;
+        }
+      } catch (e) { showError(e); }
+    });
+
+    $("refreshBtn").addEventListener("click", async () => {
+      showError(null);
+      try { if (await checkNetwork()) await refreshBalance(); } catch (e) { showError(e); }
+    });
+
+    function rollGacha() {
+      const total = GACHA.reduce((s, g) => s + g.weight, 0);
+      let r = Math.random() * total;
+      for (const g of GACHA) {
+        if (r < g.weight) {
+          const name = g.items[Math.floor(Math.random() * g.items.length)];
+          return { rarity: g.rarity, name };
+        }
+        r -= g.weight;
+      }
+      return { rarity: "N", name: GACHA[GACHA.length - 1].items[0] };
+    }
+
+    $("pullBtn").addEventListener("click", async () => {
+      showError(null);
+      $("gachaResult").innerHTML = "";
+      const btn = $("pullBtn");
+      try {
+        if (!(await checkNetwork())) return;
+        const amount = ethers.parseUnits(String(COST), decimals);
+        const bal = await token.balanceOf(account);
+        if (bal < amount) throw new Error(`イチゴが足りません(必要: ${COST}）。`);
+
+        // ① 課金(送金)トランザクションを送る
+        btn.disabled = true;
+        $("gachaStatus").textContent = "MetaMask で送金を承認してください…";
+        const tx = await token.transfer(GAME_WALLET, amount);
+
+        $("gachaStatus").textContent = "送金を確認中…（数秒）";
+        await tx.wait(); // ② 確定を待つ
+
+        // ③ 確定したのでガチャを回す
+        const prize = rollGacha();
+        const inv = loadInv();
+        inv.push(prize);
+        saveInv(inv);
+
+        $("gachaResult").innerHTML =
+          `<div class="gacha-result rarity-${prize.rarity}">${prize.rarity}！<br>${prize.name}</div>`;
+        $("gachaStatus").innerHTML =
+          `<span class="ok">課金成功!</span> ` +
+          `<a href="https://optimistic.etherscan.io/tx/${tx.hash}" target="_blank">取引を確認</a>`;
+        await refreshBalance();
+        renderInv();
+      } catch (e) {
+        $("gachaStatus").textContent = "";
+        showError(e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
