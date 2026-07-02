@@ -117,18 +117,22 @@ window.Battle = (function () {
   // artOK … 画像が存在するidを覚えておく箱({penguin:true} など)。
   const artOK = {};
   // probeArt … 画像を1回だけ試し読みして「あるか無いか」を記録(戦闘中に404を連発させないため)。
+  // charPath … 画像ファイルのパスを返す。assets.js の登録(別名でもOK)を優先し、無ければ既定名。
+  function charPath(id) {
+    return (window.Assets && Assets.CHAR && Assets.CHAR[id]) || ("assets/char/" + id + ".png");
+  }
   function probeArt(ids) {
     ids.forEach((id) => {
       if (id in artOK) return;                // 調べ済みならスキップ
       const im = new Image();
       im.onload = () => (artOK[id] = true);   // 読めた=画像あり
       im.onerror = () => (artOK[id] = false); // 読めない=画像なし(絵文字を使う)
-      im.src = "assets/char/" + id + ".png";
+      im.src = charPath(id);
     });
   }
   // charHtml … キャラの見た目HTML。画像があれば<img>、無ければ絵文字の<div>を返す。
   function charHtml(id, emoji) {
-    if (artOK[id]) return `<img class="portrait" src="assets/char/${id}.png" alt="">`;
+    if (artOK[id]) return `<img class="portrait" src="${charPath(id)}" alt="">`;
     return `<div class="emoji">${emoji}</div>`;
   }
   // floatEl … 指定要素の上に「-6」などの数字をふわっと浮かせる小道具。

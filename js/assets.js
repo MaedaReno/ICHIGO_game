@@ -12,7 +12,7 @@
 window.Assets = (function () {
   // キー(呼び名) → 画像ファイルのパス。キー名は data.js の敵id / "penguin" と対応。
   const CHAR = {
-    penguin: "assets/char/penguin.png",
+    penguin: "assets/char/penguin_yuusha.png",
     slug:    "assets/char/slug.png",
     mold:    "assets/char/mold.png",
     crow:    "assets/char/crow.png",
