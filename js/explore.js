@@ -98,7 +98,7 @@ window.Explore = (function () {
       p.ring = scene.add.circle(x, y, 20, GameState.skinColor(), 0.55).setDepth(2);
     }
     // 頭上に「プレイヤーの目印」= 下向き矢印(🔻)を置く。update でふわふわ上下させる。
-    p.marker = scene.add.text(x, y - 40, "🔻", { fontSize: "20px" }).setOrigin(0.5).setDepth(6);
+    p.marker = scene.add.text(x, y - 26, "🔻", { fontSize: "20px" }).setOrigin(0.5).setDepth(6);
     return p;
   }
 
@@ -118,7 +118,7 @@ window.Explore = (function () {
     // アニメ画像を少し上下に揺らして「生きている」感じを出す(sin波でふわふわ)
     if (p.sprite) p.sprite.setPosition(p.x, p.y + Math.sin(now / 250) * 2);
     // 頭上の目印(下向き矢印)も追従+上下にぷかぷか
-    if (p.marker) p.marker.setPosition(p.x, p.y - 40 + Math.sin(now / 200) * 3);
+    if (p.marker) p.marker.setPosition(p.x, p.y - 26 + Math.sin(now / 200) * 3);
   }
 
   // makeWalls … 壁をまとめる「静的グループ」を作り、マップとカメラの動ける範囲を決める。
