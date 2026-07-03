@@ -88,7 +88,9 @@ js/
 | 復活にかかるICHIGO | `index.html` の `REVIVE_COST` |
 | プレイヤーの移動速度 | `js/explore.js` の `movePlayer` の `speed` |
 | 敵の追尾/逃走スピード | `js/explore.js` の `enemyAI` の `CHASE` / `FLEE` |
-| 敵の配置(どこに何を置くか) | `js/explore.js` の `FieldScene` 内の敵配置リスト |
+| 戦闘エリアの追加・敵配置・広さ | `js/explore.js` 冒頭の `FIELDS`(草原/洞窟…。`cols/rows`で広さ、`enemies`で敵配置) |
+| 町/畑の内容・入口(⛩️)の行き先 | `js/explore.js` の `TownScene` / `FarmScene`(`addGate` で各エリアへ) |
+| 1画面より広くしてスクロール | 各エリアの `makeArena(scene, cols, rows, …)` の cols/rows を `VIEW_W/VIEW_H` より大きく |
 | 送金先(集約ウォレット) | `js/ichigo-pay.js` の `GAME_WALLET` |
 | 画面の色・見た目 | 各HTMLの `<style>`、`js/battle.js` の `injectStyle` |
 
