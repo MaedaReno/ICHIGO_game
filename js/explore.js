@@ -82,17 +82,23 @@ window.Explore = (function () {
     // マス目座標 → ピクセル座標へ変換(+TILE/2 でマスの中央に置く)
     const x = tx * TILE + TILE / 2, y = ty * TILE + TILE / 2;
     const shadow = addShadow(scene, x, y); // 足元の影(立体感)
-    // 足元の色つきリング(スキンの色。半透明0.55)。setDepth は重なり順(数字が大きいほど手前)。
-    const ring = scene.add.circle(x, y, 20, GameState.skinColor(), 0.55).setDepth(2);
     // 絵文字を文字として画面に置く。setOrigin(0.5) で「文字の中心」を座標基準にする。
     const p = scene.add.text(x, y, "🐧", { fontSize: "30px" }).setOrigin(0.5).setDepth(3);
     scene.physics.add.existing(p); // この表示物に「物理ボディ」を持たせる(=衝突や速度で動かせるようになる)
     // 当たり判定の大きさを 30×30 に整え、絵文字の中央に合わせる
     p.body.setSize(30, 30).setOffset((p.width - 30) / 2, (p.height - 30) / 2);
     p.body.setCollideWorldBounds(true); // マップの外へ出ないようにする
-    p.ring = ring; p.shadow = shadow; // リングと影を後で動かせるよう覚えておく
-    // assets/char/penguin.png があれば、そのアニメ画像で表示(絵文字は隠す)。無ければ絵文字のまま。
-    if (Assets.has(scene, "penguin")) { p.setText(""); p.sprite = fitSprite(scene.add.image(x, y, "penguin").setDepth(3), 44); }
+    p.shadow = shadow;
+    // assets/char/penguin.png があれば、そのアニメ画像で大きめに表示(絵文字は隠す)。
+    if (Assets.has(scene, "penguin")) {
+      p.setText("");
+      p.sprite = fitSprite(scene.add.image(x, y, "penguin").setDepth(3), 62); // 62px 相当に拡大
+    } else {
+      // 画像が無い時だけ、スキンの色を示すオーラ(丸)を出す。画像がある時は青い丸を出さない。
+      p.ring = scene.add.circle(x, y, 20, GameState.skinColor(), 0.55).setDepth(2);
+    }
+    // 頭上に「プレイヤーの目印」= 下向き矢印(🔻)を置く。update でふわふわ上下させる。
+    p.marker = scene.add.text(x, y - 40, "🔻", { fontSize: "20px" }).setOrigin(0.5).setDepth(6);
     return p;
   }
 
@@ -107,10 +113,12 @@ window.Explore = (function () {
     if (c.up.isDown || w.W.isDown) vy = -speed; else if (c.down.isDown || w.S.isDown) vy = speed;
     // setVelocity(速度)で動かす。位置を直接変えず「速度」を与えるのが物理エンジン流。
     p.body.setVelocity(vx, vy);
-    p.ring.setPosition(p.x, p.y); // 足元リングをプレイヤーに追従させる
+    if (p.ring) p.ring.setPosition(p.x, p.y); // オーラ(画像が無い時だけ存在)を追従
     if (p.shadow) p.shadow.setPosition(p.x, p.y + 14); // 影も追従
     // アニメ画像を少し上下に揺らして「生きている」感じを出す(sin波でふわふわ)
     if (p.sprite) p.sprite.setPosition(p.x, p.y + Math.sin(now / 250) * 2);
+    // 頭上の目印(下向き矢印)も追従+上下にぷかぷか
+    if (p.marker) p.marker.setPosition(p.x, p.y - 40 + Math.sin(now / 200) * 3);
   }
 
   // makeWalls … 壁をまとめる「静的グループ」を作り、マップとカメラの動ける範囲を決める。
@@ -234,7 +242,7 @@ window.Explore = (function () {
       // スキン屋などから戻って(resume=シーン再開)きた時に、見た目やHUDを更新する
       scene.events.on("resume", () => {
         scene.busy = false;
-        if (scene.player) scene.player.ring.setFillStyle(GameState.skinColor(), 0.55); // 選んだ色を反映
+        if (scene.player && scene.player.ring) scene.player.ring.setFillStyle(GameState.skinColor(), 0.55); // 画像が無い時のオーラ色を反映
         cbs.refreshHud && cbs.refreshHud(); // refreshHud があれば呼ぶ(&& で存在チェック)
       });
 

@@ -70,7 +70,7 @@ window.Battle = (function () {
       background:#000000aa; font-size:2rem; font-weight:800; gap:16px; z-index:5; }
     #battle .banner button { font-size:1rem; padding:10px 22px; border:0; border-radius:10px; cursor:pointer; background:#ffd24a; }
     #battle .unit { position:relative; }                 /* ダメージ数字を上に重ねるための基準 */
-    #battle .portrait { width:3rem; height:3rem; object-fit:contain; }  /* アニメ画像の表示サイズ */
+    #battle .portrait { width:3.6rem; height:3.6rem; object-fit:contain; }  /* アニメ画像の表示サイズ */
     #battle .float { position:absolute; left:50%; top:6px; transform:translateX(-50%); font-weight:800; font-size:1.15rem; pointer-events:none; text-shadow:0 1px 3px #000; animation:floatUp .9s ease-out forwards; }
     #battle .float.dmg { color:#ff6b6b; }                /* ダメージは赤 */
     #battle .float.heal { color:#7bed9f; }               /* 回復は緑 */
